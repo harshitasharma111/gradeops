@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.dependencies import require_instructor
-from app.models.exam import Exam
+from app.models.exam import Exam, ExamStatus
+from app.services.ocr_service import extract_text_from_pdf
 import shutil
 import os
 
@@ -59,3 +60,23 @@ def list_exams(db: Session = Depends(get_db), user=Depends(require_instructor)):
         }
         for e in exams
     ]
+
+@router.post("/ocr/{exam_id}")
+def run_ocr(exam_id: int, db: Session = Depends(get_db), user=Depends(require_instructor)):
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    exam.status = ExamStatus.processing
+    db.commit()
+
+    extracted = extract_text_from_pdf(exam.file_path)
+
+    exam.status = ExamStatus.graded
+    db.commit()
+
+    return {
+        "exam_id": exam.id,
+        "student": exam.student_name,
+        "extracted_text": extracted
+    }
