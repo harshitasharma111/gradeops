@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Depends
 from app.core.database import engine
-from app.core.dependencies import require_instructor, require_ta, get_current_user
+from app.core.dependencies import require_instructor, require_ta
 from app.api.auth import router as auth_router
+from app.api.exams import router as exam_router
 
 app = FastAPI(title="GradeOps API", version="1.0.0")
 app.include_router(auth_router)
+app.include_router(exam_router)
 
 @app.on_event("startup")
 def startup():
