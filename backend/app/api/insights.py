@@ -31,3 +31,19 @@ def model_answer_similarity(exam_id: int, data: ModelAnswerRequest, db: Session 
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+from app.services.calibration_service import confidence_calibration, rubric_optimization
+
+@router.get("/exam/{exam_id}/calibration")
+def get_calibration(exam_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    result = confidence_calibration(exam_id, db)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+@router.get("/exam/{exam_id}/rubric-optimization")
+def get_rubric_optimization(exam_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    result = rubric_optimization(exam_id, db)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
