@@ -214,7 +214,7 @@ const InstructorDashboard = () => {
         )}
 
         {view === 'analytics' && analytics && (
-          <AnalyticsDashboard analytics={analytics} onBack={() => setView('course-detail')} />
+          <AnalyticsDashboard analytics={analytics} examId={selectedExam?.exam_id} onBack={() => setView('course-detail')} />
         )}
 
       </div>
