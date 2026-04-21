@@ -7,6 +7,7 @@ from app.api.courses import router as course_router
 from app.api.grading import router as grading_router
 from app.api.analytics import router as analytics_router
 from app.api.prediction import router as prediction_router
+from app.api.insights import router as insights_router
 
 app = FastAPI(title="GradeOps API", version="1.0.0")
 
@@ -24,6 +25,7 @@ app.include_router(course_router)
 app.include_router(grading_router)
 app.include_router(analytics_router)
 app.include_router(prediction_router)
+app.include_router(insights_router)
 
 @app.on_event("startup")
 def startup():
