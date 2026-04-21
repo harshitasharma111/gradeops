@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import engine
 from app.api.auth import router as auth_router
@@ -6,6 +6,7 @@ from app.api.exams import router as exam_router
 from app.api.courses import router as course_router
 from app.api.grading import router as grading_router
 from app.api.analytics import router as analytics_router
+from app.api.prediction import router as prediction_router
 
 app = FastAPI(title="GradeOps API", version="1.0.0")
 
@@ -22,6 +23,7 @@ app.include_router(exam_router)
 app.include_router(course_router)
 app.include_router(grading_router)
 app.include_router(analytics_router)
+app.include_router(prediction_router)
 
 @app.on_event("startup")
 def startup():
