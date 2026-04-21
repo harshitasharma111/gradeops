@@ -4,6 +4,7 @@ from app.core.database import engine
 from app.core.dependencies import require_instructor, require_ta
 from app.api.auth import router as auth_router
 from app.api.exams import router as exam_router
+from app.api.courses import router as course_router
 from app.api.grading import router as grading_router
 
 app = FastAPI(title="GradeOps API", version="1.0.0")
@@ -18,6 +19,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(exam_router)
+app.include_router(course_router)
 app.include_router(grading_router)
 
 @app.on_event("startup")
@@ -36,11 +38,3 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-@app.get("/instructor/dashboard")
-def instructor_dashboard(user=Depends(require_instructor)):
-    return {"message": f"Welcome Instructor {user.name}"}
-
-@app.get("/ta/dashboard")
-def ta_dashboard(user=Depends(require_ta)):
-    return {"message": f"Welcome TA {user.name}"}
