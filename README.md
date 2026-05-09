@@ -1,6 +1,6 @@
 # GradeOps 🎓
 
-> **AI-powered Human-in-the-Loop exam grading platform** — Automates handwritten exam grading using Vision-Language Models, Agentic LLMs, and a full ML analytics pipeline, with Teaching Assistants as the final decision makers.
+> **AI-powered Human-in-the-Loop exam grading platform** — Automates handwritten exam grading using a custom-trained CNN+BiLSTM+CTC Vision model, Agentic LLMs, and a full ML analytics pipeline, with Teaching Assistants as the final decision makers.
 
 ---
 
@@ -8,7 +8,7 @@
 
 Grading handwritten exams is time-consuming, inconsistent, and prone to fatigue-induced bias. GradeOps solves this by building a complete AI pipeline that:
 
-1. **Reads** scanned handwritten PDFs using Gemini Vision OCR
+1. **Reads** scanned handwritten PDFs using a **custom-trained HTR model** (CNN + BiLSTM + CTC) trained from scratch on the IAM Handwriting Dataset
 2. **Grades** each answer against a structured rubric using a Langgraph agentic pipeline powered by Llama 3.3 70B
 3. **Presents** AI-proposed grades to Teaching Assistants in a split-screen review dashboard with keyboard shortcuts
 4. **Analyzes** class performance using a full DS/ML analytics stack
@@ -34,9 +34,9 @@ The system is designed so **AI proposes, humans decide** — ensuring fairness a
 └──────┬──────────────┬──────────────┬──────────────┬────────────┘
        │              │              │              │
 ┌──────▼──────┐ ┌─────▼──────┐ ┌────▼─────┐ ┌────▼──────────┐
-│  PostgreSQL  │ │   Gemini   │ │  Groq +  │ │  scikit-learn │
-│  SQLAlchemy  │ │  Vision    │ │ Llama3.3 │ │  sentence-    │
-│  Alembic     │ │  OCR       │ │ Langgraph│ │  transformers │
+│  PostgreSQL  │ │  Custom    │ │  Groq +  │ │  scikit-learn │
+│  SQLAlchemy  │ │  HTR Model │ │ Llama3.3 │ │  sentence-    │
+│  Alembic     │ │CNN+BiLSTM  │ │ Langgraph│ │  transformers │
 └─────────────┘ └────────────┘ └──────────┘ └───────────────┘
 ```
 
@@ -44,12 +44,54 @@ The system is designed so **AI proposes, humans decide** — ensuring fairness a
 
 ## 🤖 AI / ML Pipeline
 
-### 1. OCR Layer — Gemini Vision
+### 1. Custom HTR Model — Trained from Scratch on IAM Dataset
 
-- Converts each PDF page to a high-resolution image using `pdf2image` + `poppler`
-- Sends images to Gemini Vision API with a structured extraction prompt
-- Extracts handwritten text per question with context preservation
-- **Production feature:** Exponential backoff retry logic (5s → 10s → 20s → 40s) on rate limits
+Instead of using a third-party OCR API, we trained our own **Handwritten Text Recognition (HTR)** model from scratch.
+
+**Architecture: CNN + BiLSTM + CTC**
+
+```
+Scanned Exam Page
+        ↓
+CNN with Residual Blocks (5 layers)
+— ResidualBlock connections prevent vanishing gradients
+— BatchNorm + ReLU activations
+— Extracts visual features from handwriting strokes
+        ↓
+Bidirectional LSTM (2 layers, hidden=256)
+— Reads feature sequence left→right AND right→left
+— Temporal Attention weights important timesteps
+        ↓
+CTC (Connectionist Temporal Classification)
+— Handles variable-length outputs without pre-segmentation
+— Beam Search decoding (width=10) for accuracy
+        ↓
+Extracted Text
+```
+
+**Training Details:**
+- Dataset: IAM Handwriting Word Database (115,320 word images, 657 writers)
+- Split: 90% train / 5% validation / 5% test
+- Optimizer: AdamW (lr=3e-4, weight_decay=1e-4)
+- Scheduler: Cosine Annealing LR over 50 epochs
+- Gradient Clipping: 5.0 (prevents exploding gradients in LSTM)
+- Hardware: NVIDIA RTX 4060 Laptop GPU (8GB VRAM)
+- Training Time: ~2 hours
+
+**Data Augmentation:**
+- Random rotation (±5°)
+- Random brightness/contrast variation
+- Elastic distortion (simulates natural handwriting variation)
+- Random perspective transform
+
+**Results:**
+
+| Metric | Value |
+|--------|-------|
+| Best Validation CER | **10.37%** |
+| Test CER | **12.18%** |
+| Test WER | **31.94%** |
+| Character Accuracy | **87.82%** |
 
 ### 2. Agentic Grading — Langgraph + Llama 3.3 70B (Groq)
 
@@ -65,70 +107,59 @@ A **4-node Langgraph state graph** processes each answer:
 - **confidence_check:** Computes confidence score, flags urgent reviews
 
 ### 3. Plagiarism Detection — Sentence Embeddings + Cosine Similarity
-
 - Embeds all student answers using `sentence-transformers` (`all-MiniLM-L6-v2`)
-- Computes pairwise cosine similarity matrix using `scikit-learn`
+- Computes pairwise cosine similarity matrix
 - Flags answer pairs above 0.85 similarity threshold
-- Stores flagged pairs with similarity scores in PostgreSQL
+- Catches paraphrasing — semantic similarity, not keyword matching
 
 ### 4. Grade Prediction — Random Forest (scikit-learn)
-
-- Extracts 8 text features: word count, char count, sentence count, formula presence, number presence, avg word length, definition keywords, normalized length
-- Trains a Random Forest classifier on historical graded answers
+- Extracts 8 engineered text features from OCR output
+- Trains Random Forest classifier on historical graded answers
 - Predicts score range: **high / medium / low** with probability scores
-- Persists trained model using `joblib`
 
 ### 5. Answer Quality Clustering — K-Means (scikit-learn)
-
 - Encodes student answers as sentence embeddings
 - Clusters using K-Means with StandardScaler normalization
 - Auto-labels clusters: High Quality / Partial Understanding / Needs Improvement
-- Visualized in the analytics dashboard
 
 ### 6. Statistical Analysis — Pandas + NumPy + SciPy
-
-- **Pearson Correlation:** Word count vs score correlation with p-value significance testing
-- **Confidence Calibration:** Compares AI confidence vs actual TA approval rate across bins
-- **Rubric Optimization:** Analyzes condition satisfaction rates, flags too-strict/too-easy conditions
-- **Grade Analytics:** Class average, median, std deviation, difficulty index, override rate
+- **Pearson Correlation:** Word count vs score with p-value significance testing
+- **Confidence Calibration:** AI confidence vs actual TA approval rate curve
+- **Rubric Optimization:** Flags too-strict/too-easy rubric conditions
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Backend
-
-| Layer          | Technology                 |
-| -------------- | -------------------------- |
-| Web Framework  | FastAPI                    |
-| Database       | PostgreSQL                 |
-| ORM            | SQLAlchemy                 |
-| Migrations     | Alembic                    |
+| Layer | Technology |
+|-------|-----------|
+| Web Framework | FastAPI |
+| Database | PostgreSQL |
+| ORM | SQLAlchemy |
+| Migrations | Alembic |
 | Authentication | JWT (python-jose) + bcrypt |
-| Task Queuing   | FastAPI Background Tasks   |
 
 ### AI / ML
-
-| Purpose              | Technology                                               |
-| -------------------- | -------------------------------------------------------- |
-| Handwriting OCR      | Gemini Vision API (google-genai)                         |
-| Agentic Grading      | Langgraph + Langchain                                    |
-| LLM Inference        | Groq API (Llama 3.3 70B)                                 |
-| Sentence Embeddings  | sentence-transformers (all-MiniLM-L6-v2)                 |
-| ML Models            | scikit-learn (Random Forest, K-Means, cosine similarity) |
-| Statistical Analysis | pandas, numpy, scipy                                     |
-| Model Persistence    | joblib                                                   |
+| Purpose | Technology |
+|---------|-----------|
+| Handwriting OCR | Custom CNN+BiLSTM+CTC (PyTorch) — trained from scratch |
+| OCR Training Data | IAM Handwriting Dataset (Kaggle) |
+| Agentic Grading | Langgraph + Langchain |
+| LLM Inference | Groq API (Llama 3.3 70B) |
+| Sentence Embeddings | sentence-transformers (all-MiniLM-L6-v2) |
+| ML Models | scikit-learn (Random Forest, K-Means, cosine similarity) |
+| Statistical Analysis | pandas, numpy, scipy |
+| Model Persistence | PyTorch checkpoint + joblib |
 
 ### Frontend
-
-| Layer       | Technology         |
-| ----------- | ------------------ |
-| Framework   | React + TypeScript |
-| Styling     | Tailwind CSS       |
-| Routing     | React Router       |
-| HTTP Client | Axios              |
-| Charts      | Recharts           |
-| Icons       | Lucide React       |
+| Layer | Technology |
+|-------|-----------|
+| Framework | React + TypeScript |
+| Styling | Tailwind CSS |
+| Routing | React Router |
+| HTTP Client | Axios |
+| Charts | Recharts |
 
 ---
 
@@ -153,38 +184,50 @@ users
 ## 🚀 Getting Started
 
 ### Prerequisites
-
-- Python 3.10+
+- Python 3.11+
 - Node.js 18+
 - PostgreSQL 14+
-- Homebrew (Mac) for poppler and tesseract
+- NVIDIA GPU with CUDA (for HTR model training/inference)
 
 ### Backend Setup
 
 ```bash
-# Clone the repo
 git clone https://github.com/harshitasharma111/gradeops.git
 cd gradeops/backend
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Install system dependencies (Mac)
-brew install poppler tesseract
-
-# Set up environment variables
 cp .env.example .env
-# Fill in your API keys and database URL
+# Fill in GROQ_API_KEY and DATABASE_URL
 
-# Run migrations
 alembic upgrade head
-
-# Start the server
 uvicorn app.main:app --reload
+```
+
+### OCR Model Setup
+
+```bash
+cd gradeops
+py -3.11 -m venv ocr_env
+ocr_env\Scripts\activate
+
+# Install PyTorch with CUDA
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+pip install opencv-python numpy matplotlib pillow editdistance scipy
+
+# Download IAM dataset from Kaggle
+kaggle datasets download -d nibinv23/iam-handwriting-word-database
+mkdir ocr_data
+tar -xf iam-handwriting-word-database.zip -C ocr_data
+
+# Train (~2 hours on RTX 4060)
+python ocr_model/train.py
+
+# Test inference
+python ocr_model/inference.py
 ```
 
 ### Frontend Setup
@@ -202,7 +245,6 @@ DATABASE_URL=postgresql://user:password@localhost:5432/gradeops
 SECRET_KEY=your_secret_key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-GEMINI_API_KEY=your_gemini_api_key
 GROQ_API_KEY=your_groq_api_key
 ```
 
@@ -211,99 +253,48 @@ GROQ_API_KEY=your_groq_api_key
 ## 📱 Application Flow
 
 ### Instructor Workflow
-
-1. Register as Instructor → Create courses
-2. Build exams with questions and granular rubric conditions
-3. Upload student PDF scans (bulk supported)
-4. Trigger OCR → AI grading pipeline
-5. View analytics dashboard with 5 analysis tabs
+1. Register → Create courses
+2. Build exams with questions and rubric conditions
+3. Upload student PDF scans
+4. Trigger OCR (custom HTR model) → AI grading pipeline
+5. View analytics dashboard (5 tabs)
 6. Review plagiarism flags
 
 ### TA Workflow
-
-1. Register as TA → Get assigned to courses by instructor
+1. Register as TA → Get assigned to courses
 2. See pending review queue sorted by urgency
-3. Split-screen review: handwritten answer (left) vs AI grade + justification (right)
-4. Keyboard shortcuts: **A** = Approve, **O** = Override, **← →** = Navigate
-5. Override with custom score and comment if needed
+3. Split-screen: handwritten answer (left) + AI grade + justification (right)
+4. **A** = Approve, **O** = Override, **← →** = Navigate
 
 ---
 
-## 📊 Analytics Dashboard
+## 📊 Analytics Dashboard (5 Tabs)
 
-The analytics dashboard has **5 tabs** powered by different ML/DS techniques:
-
-| Tab                        | What it shows                                                          | Tech                                       |
-| -------------------------- | ---------------------------------------------------------------------- | ------------------------------------------ |
-| **Overview**               | Score distribution, pass/fail, difficulty index, per-question averages | pandas, numpy, Recharts                    |
-| **K-Means Clustering**     | Student answers grouped by semantic similarity                         | sentence-transformers, scikit-learn KMeans |
-| **Correlation Analysis**   | Word count vs score Pearson correlation with scatter plot              | scipy.stats, Recharts ScatterChart         |
-| **Confidence Calibration** | AI confidence vs actual TA approval rate curve                         | numpy, Recharts LineChart                  |
-| **Rubric Optimization**    | Flags too-strict or too-easy rubric conditions                         | Statistical analysis                       |
+| Tab | What it shows | Tech |
+|-----|--------------|------|
+| **Overview** | Score distribution, pass/fail, difficulty index | pandas, numpy, Recharts |
+| **K-Means Clustering** | Answer quality groups | sentence-transformers, KMeans |
+| **Correlation Analysis** | Word count vs score Pearson r | scipy.stats, ScatterChart |
+| **Confidence Calibration** | AI confidence vs TA approval rate | numpy, LineChart |
+| **Rubric Optimization** | Flags poorly designed conditions | Statistical analysis |
 
 ---
 
-## 🔌 API Reference
+## 🧪 Key ML/DL Concepts Demonstrated
 
-### Auth
-
-| Method | Endpoint         | Description                       |
-| ------ | ---------------- | --------------------------------- |
-| POST   | `/auth/register` | Register new user (instructor/ta) |
-| POST   | `/auth/login`    | Login and get JWT token           |
-
-### Courses
-
-| Method | Endpoint                  | Description                      |
-| ------ | ------------------------- | -------------------------------- |
-| POST   | `/courses/create`         | Create a new course              |
-| GET    | `/courses/my-courses`     | Get all courses for current user |
-| POST   | `/courses/{id}/assign-ta` | Assign TA to course              |
-
-### Exams
-
-| Method | Endpoint                          | Description                           |
-| ------ | --------------------------------- | ------------------------------------- |
-| POST   | `/exams/create`                   | Create exam with questions and rubric |
-| GET    | `/exams/course/{id}`              | Get all exams for a course            |
-| POST   | `/exams/{id}/upload-submission`   | Upload student PDF                    |
-| POST   | `/exams/submissions/{id}/process` | Run OCR on submission                 |
-
-### Grading
-
-| Method | Endpoint                 | Description                       |
-| ------ | ------------------------ | --------------------------------- |
-| POST   | `/grade/submission/{id}` | Grade all answers in a submission |
-| GET    | `/grade/pending-reviews` | Get all pending TA reviews        |
-| POST   | `/grade/review/{id}`     | Approve or override a grade       |
-
-### Analytics & Insights
-
-| Method | Endpoint                                  | Description                    |
-| ------ | ----------------------------------------- | ------------------------------ |
-| GET    | `/analytics/exam/{id}`                    | Full exam analytics            |
-| POST   | `/analytics/exam/{id}/plagiarism`         | Run plagiarism check           |
-| GET    | `/analytics/exam/{id}/export`             | Export grades to Excel         |
-| GET    | `/insights/exam/{id}/clusters`            | K-Means clustering             |
-| GET    | `/insights/exam/{id}/correlations`        | Pearson correlation analysis   |
-| GET    | `/insights/exam/{id}/calibration`         | Confidence calibration         |
-| GET    | `/insights/exam/{id}/rubric-optimization` | Rubric suggestions             |
-| POST   | `/predict/train`                          | Train grade prediction model   |
-| POST   | `/predict/score`                          | Predict score range for answer |
-
----
-
-## 🧪 Key ML Concepts Demonstrated
-
-- **Agentic AI** — Multi-node Langgraph pipeline with state management
-- **Vision-Language Models** — Gemini Vision for handwriting OCR
-- **Retrieval & Embedding** — Sentence embeddings for semantic similarity
+- **Custom HTR from Scratch** — CNN+BiLSTM+CTC on IAM dataset, CER 10.37%
+- **Residual Connections** — Prevents vanishing gradients in deep CNN
+- **Bidirectional LSTM** — Captures context from both sequence directions
+- **CTC Loss** — Variable-length sequence alignment without pre-segmentation
+- **Beam Search Decoding** — Outperforms greedy CTC decoding
+- **Data Augmentation** — Elastic distortion, perspective transform, rotation
+- **Agentic AI** — Multi-node Langgraph pipeline with shared state
+- **Sentence Embeddings** — Semantic text representation (384 dimensions)
 - **Unsupervised Learning** — K-Means clustering of answer quality
 - **Supervised Learning** — Random Forest grade prediction
-- **Statistical Testing** — Pearson correlation with p-value significance
-- **Model Evaluation** — Confidence calibration curves
-- **Human-in-the-Loop** — AI proposes, TA decides architecture
-- **Production Patterns** — Exponential backoff, JWT auth, RBAC, migrations
+- **Statistical Testing** — Pearson r with p-value significance
+- **Model Evaluation** — CER/WER metrics + confidence calibration curves
+- **Human-in-the-Loop** — AI proposes, TA decides
 
 ---
 
@@ -322,9 +313,13 @@ gradeops/
 ├── frontend/
 │   └── src/
 │       ├── pages/        # React pages
-│       ├── components/   # Reusable components
 │       ├── services/     # API client
 │       └── context/      # Auth context
+├── ocr_model/
+│   ├── dataset.py        # IAM dataset loader + augmentation pipeline
+│   ├── model.py          # CNN+BiLSTM+CTC + Beam Search decoder
+│   ├── train.py          # Training loop + CosineAnnealingLR + CER/WER
+│   └── inference.py      # Inference + PDF page text extraction
 └── storage/
     └── exams/            # Uploaded PDF files
 ```
@@ -334,28 +329,26 @@ gradeops/
 ## 📈 CV Highlights
 
 **For Software Engineering CV:**
-
-- Full-stack application with FastAPI + React + PostgreSQL
-- JWT authentication with Role-Based Access Control
-- RESTful API design with 20+ endpoints
-- Database migrations with Alembic
-- Production patterns: retry logic, CORS, dependency injection
+- Full-stack FastAPI + React + PostgreSQL application
+- JWT auth with Role-Based Access Control (Instructor/TA)
+- 20+ REST API endpoints with Pydantic validation
+- Production patterns: migrations, CORS, dependency injection, retry logic
 
 **For Data Science / ML CV:**
-
-- End-to-end NLP pipeline: OCR → text extraction → embedding → grading
-- Unsupervised ML: K-Means clustering with sentence embeddings
-- Supervised ML: Random Forest with 8 engineered features
-- Statistical analysis: Pearson correlation, p-value testing
-- Model evaluation: Confidence calibration curves
-- Agentic AI: Multi-node Langgraph grading pipeline
-- Data visualization: 10+ Recharts chart types
+- Trained custom CNN+BiLSTM+CTC HTR model from scratch — CER 10.37%
+- CTC loss with beam search decoding on IAM handwriting benchmark
+- Data augmentation: elastic distortion, perspective transform
+- NLP pipeline: OCR → embeddings → clustering → grading
+- K-Means clustering, Random Forest, cosine similarity plagiarism detection
+- Pearson correlation with statistical significance testing
+- Confidence calibration analysis for ML model evaluation
 
 ---
 
 ## 🙏 Acknowledgements
 
+- [IAM Handwriting Database](https://www.kaggle.com/datasets/nibinv23/iam-handwriting-word-database) — Training dataset
+- [SimpleHTR](https://github.com/githubharald/SimpleHTR) — Reference architecture
 - [Groq](https://groq.com) — Ultra-fast LLM inference
-- [Google Gemini](https://ai.google.dev) — Vision-Language Model for OCR
 - [Langgraph](https://langchain-ai.github.io/langgraph/) — Agentic AI framework
 - [Sentence Transformers](https://www.sbert.net) — Semantic embeddings
