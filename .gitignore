@@ -1,0 +1,4 @@
+iam-handwriting-word-database.zip
+ocr_data/
+ocr_model/checkpoints/
+ocr_model/logs/
