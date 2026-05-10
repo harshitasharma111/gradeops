@@ -7,18 +7,18 @@ import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from model import HTRModel, ctc_beam_search_decode
-from dataset import CHAR2IDX, IDX2CHAR, NUM_CLASSES, IMG_HEIGHT, IMG_WIDTH
+from model_v2 import HTRModelV2, ctc_beam_search_decode
+from dataset_lines import CHAR2IDX, IDX2CHAR, NUM_CLASSES, IMG_HEIGHT, IMG_WIDTH
 
 CHECKPOINT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    'checkpoints', 'best_model.pth'
+    'checkpoints_v2', 'best_model_v2.pth'
 )
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # ── Load model once at module level ───────────────────────────────
 def load_model():
-    model = HTRModel(num_classes=NUM_CLASSES).to(DEVICE)
+    model = HTRModelV2(num_classes=NUM_CLASSES).to(DEVICE)
     checkpoint = torch.load(CHECKPOINT_PATH, map_location=DEVICE)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
