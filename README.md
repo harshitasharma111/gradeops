@@ -4,7 +4,7 @@
 
 ---
 
-## 🧠 What is GradeOps?
+## What is GradeOps?
 
 Grading handwritten exams is time-consuming, inconsistent, and prone to fatigue-induced bias. GradeOps solves this by building a complete AI pipeline that:
 
@@ -18,7 +18,7 @@ The system is designed so **AI proposes, humans decide** — ensuring fairness a
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -42,7 +42,7 @@ The system is designed so **AI proposes, humans decide** — ensuring fairness a
 
 ---
 
-## 🤖 AI / ML Pipeline
+## AI / ML Pipeline
 
 ### 1. Custom HTR Models — Trained from Scratch
 
@@ -157,7 +157,7 @@ A **4-node Langgraph state graph** processes each answer:
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Backend
 | Layer | Technology |
@@ -192,7 +192,7 @@ A **4-node Langgraph state graph** processes each answer:
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
 ```
 users
@@ -210,7 +210,7 @@ users
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Python 3.11+
@@ -290,7 +290,7 @@ GROQ_API_KEY=your_groq_api_key
 
 ---
 
-## 📱 Application Flow
+## Application Flow
 
 ### Instructor Workflow
 1. Register → Create courses
@@ -308,7 +308,7 @@ GROQ_API_KEY=your_groq_api_key
 
 ---
 
-## 📊 Analytics Dashboard
+## Analytics Dashboard
 
 | Tab | Analysis | Libraries |
 |-----|----------|-----------|
@@ -320,7 +320,7 @@ GROQ_API_KEY=your_groq_api_key
 
 ---
 
-## 🔌 API Reference
+## API Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -347,7 +347,7 @@ GROQ_API_KEY=your_groq_api_key
 
 ---
 
-## 👩‍💻 Project Structure
+## Project Structure
 
 ```
 gradeops/
@@ -379,10 +379,7 @@ gradeops/
 
 ---
 
-## 🙏 Acknowledgements
+## Authors
 
-- [IAM Handwriting Database](https://www.kaggle.com/datasets/nibinv23/iam-handwriting-word-database) — Training dataset
-- [SimpleHTR](https://github.com/githubharald/SimpleHTR) — Reference architecture
-- [Groq](https://groq.com) — LLM inference
-- [Langgraph](https://langchain-ai.github.io/langgraph/) — Agentic AI framework
-- [Sentence Transformers](https://www.sbert.net) — Semantic text embeddings
+- Harshita Sharma
+- Abhinav Chouhan
